@@ -1,23 +1,174 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>YouTube 5-Min Tracker</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>YouTube 5-Minute Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    body {
+        background: #0f0f0f;
+        color: #fff;
+        font-family: Arial, sans-serif;
+        padding: 20px;
+    }
+    .box {
+        background: #1a1a1a;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    input {
+        width: 240px;
+        padding: 10px;
+        border-radius: 8px;
+        border: none;
+        outline: none;
+    }
+    button {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 8px;
+        background: #ff0000;
+        color: white;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    table {
+        width: 100%;
+        margin-top: 15px;
+        border-collapse: collapse;
+    }
+    table th, table td {
+        padding: 10px;
+        border-bottom: 1px solid #333;
+        text-align: left;
+    }
+</style>
 </head>
 <body>
-<h2>YouTube 5-Min Interval Tracker</h2>
 
-<input id="videoId" placeholder="Enter YouTube Video ID"/>
-<button onclick="startTracking()">Start Tracking</button>
+<h2>YouTube 5-Minute Interval Tracker</h2>
 
-<h3>Live Stats</h3>
-<div id="live"></div>
+<div class="box">
+    <input id="videoId" placeholder="Enter YouTube Video ID">
+    <button onclick="startTracking()">Start Tracking</button>
+</div>
 
-<h3>5-Minute History</h3>
-<table border="1" id="history">
-<tr><th>Time</th><th>Views</th><th>Likes</th></tr>
-</table>
+<div class="box">
+    <h3>Live Stats</h3>
+    <p id="liveViews">Views: --</p>
+    <p id="liveLikes">Likes: --</p>
+</div>
 
-<script src="script.js"></script>
+<div class="box">
+    <h3>Live Chart</h3>
+    <canvas id="chart"></canvas>
+</div>
+
+<div class="box">
+    <h3>5-Minute History</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Views</th>
+                <th>Likes</th>
+            </tr>
+        </thead>
+        <tbody id="historyTable"></tbody>
+    </table>
+</div>
+
+<script>
+const backend = "https://tb33.onrender.com";
+
+let chart;
+let chartData = {
+    labels: [],
+    views: [],
+    likes: []
+};
+
+async function startTracking() {
+    let videoId = document.getElementById("videoId").value.trim();
+    if (!videoId) return alert("Enter video ID!");
+
+    await fetch(backend + "/start", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ videoId })
+    });
+
+    alert("Tracking started!");
+
+    loadHistory(videoId);
+    setInterval(() => loadHistory(videoId), 10000); // 10 seconds refresh
+}
+
+async function loadHistory(videoId) {
+    const res = await fetch(backend + "/history/" + videoId);
+    const data = await res.json();
+
+    if (!data.length) return;
+
+    // Update table
+    let html = "";
+    data.forEach(row => {
+        html += `
+            <tr>
+                <td>${new Date(row.timestamp).toLocaleTimeString()}</td>
+                <td>${row.views}</td>
+                <td>${row.likes}</td>
+            </tr>
+        `;
+    });
+    document.getElementById("historyTable").innerHTML = html;
+
+    // Update live values
+    let latest = data[data.length - 1];
+    document.getElementById("liveViews").innerHTML = "Views: " + latest.views;
+    document.getElementById("liveLikes").innerHTML = "Likes: " + latest.likes;
+
+    // Update chart
+    chartData.labels = data.map(r => new Date(r.timestamp).toLocaleTimeString());
+    chartData.views = data.map(r => r.views);
+    chartData.likes = data.map(r => r.likes);
+
+    renderChart();
+}
+
+function renderChart() {
+    if (chart) chart.destroy();
+
+    let ctx = document.getElementById("chart").getContext("2d");
+
+    chart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: chartData.labels,
+            datasets: [
+                {
+                    label: "Views",
+                    data: chartData.views,
+                    borderColor: "red",
+                    borderWidth: 2
+                },
+                {
+                    label: "Likes",
+                    data: chartData.likes,
+                    borderColor: "yellow",
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            scales: {
+                y: { beginAtZero: false }
+            }
+        }
+    });
+}
+</script>
+
 </body>
 </html>
